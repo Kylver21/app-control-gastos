@@ -1,0 +1,5 @@
+import { HandCoins } from 'lucide-react';
+import { ResumenFinanciero } from '@/tipos/movimientos';
+import { moneda } from '@/utilidades/formato';
+
+export function PanelPrestamos({ prestamos }: Pick<ResumenFinanciero, 'prestamos'>) { return <section className="rounded-xl border border-[#dedde8] bg-white p-5 shadow-[0_2px_8px_rgba(29,29,38,.04)]"><h2 className="mb-5 flex items-center gap-2 text-lg font-bold"><HandCoins size={18} /> Préstamos familiares</h2><div className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-[#e2e1eb] bg-[#f7f6fc] p-3"><p className="text-[10px] uppercase text-[#858592]">Me deben</p><p className="mt-2 font-bold text-[#007c59]">{moneda(prestamos)}</p><p className="mt-1 text-[10px] text-[#656472]">Carlos (Hermano)</p></div><div className="rounded-lg border border-[#e2e1eb] bg-[#f7f6fc] p-3"><p className="text-[10px] uppercase text-[#858592]">Yo debo</p><p className="mt-2 font-bold text-[#c52c2f]">S/ 0.00</p><p className="mt-1 text-[10px] text-[#656472]">Al día</p></div></div></section>; }
