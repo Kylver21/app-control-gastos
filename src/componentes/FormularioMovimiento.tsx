@@ -1,13 +1,16 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { SelectorTipoMovimiento } from '@/componentes/SelectorTipoMovimiento';
-import { DireccionPrestamo, Movimiento, TipoMovimiento } from '@/tipos/movimientos';
+import { Cuenta, DireccionPrestamo, Movimiento, TipoMovimiento } from '@/tipos/movimientos';
 
 type Props = {
   alCerrar: () => void;
-  alGuardar: (datos: Omit<Movimiento, 'id'>) => void;
+  alGuardar: (datos: DatosFormulario) => Promise<void>;
   movimientoInicial?: Movimiento;
+  cuentas: Cuenta[];
 };
+
+export type DatosFormulario = Omit<Movimiento, 'id' | 'cuenta'> & { cuenta_id: string; persona?: string };
 
 const categorias: Record<TipoMovimiento, string[]> = {
   gasto: ['Alimentación', 'Transporte', 'Vivienda', 'Entretenimiento', 'Cuidado personal', 'Gastos hormiga'],
@@ -15,21 +18,20 @@ const categorias: Record<TipoMovimiento, string[]> = {
   prestamo: ['Préstamo familiar', 'Préstamo personal'],
 };
 
-const cuentas = ['Cuenta principal', 'Tarjeta terminada en 42', 'Billetera digital', 'Efectivo', 'Ahorro'];
-
-export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }: Props) {
+export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial, cuentas }: Props) {
   const [tipo, setTipo] = useState<TipoMovimiento>(movimientoInicial?.tipo ?? 'gasto');
   const [monto, setMonto] = useState(movimientoInicial?.monto.toString() ?? '');
   const [fecha, setFecha] = useState(movimientoInicial?.fecha ?? new Date().toISOString().slice(0, 10));
   const [categoria, setCategoria] = useState(movimientoInicial?.categoria ?? '');
-  const [cuenta, setCuenta] = useState(movimientoInicial?.cuenta ?? '');
-  const [nota, setNota] = useState(movimientoInicial?.nota ?? '');
+  const [cuenta, setCuenta] = useState(movimientoInicial?.cuenta_id ?? '');
+  const [concepto, setConcepto] = useState(movimientoInicial?.concepto ?? '');
+  const [persona, setPersona] = useState(movimientoInicial?.persona ?? '');
   const [direccionPrestamo, setDireccionPrestamo] = useState<DireccionPrestamo>(movimientoInicial?.direccionPrestamo ?? 'prestado');
   const [errores, setErrores] = useState<Record<string, string>>({});
 
   const categoriasActivas = useMemo(() => categorias[tipo], [tipo]);
 
-  function enviar(evento: FormEvent<HTMLFormElement>) {
+  async function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
 
     const nuevosErrores: Record<string, string> = {};
@@ -37,7 +39,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }:
     if (!fecha) nuevosErrores.fecha = 'Selecciona una fecha.';
     if (!categoria) nuevosErrores.categoria = 'Selecciona una categoría.';
     if (!cuenta) nuevosErrores.cuenta = 'Selecciona una cuenta.';
-    if (!nota.trim()) nuevosErrores.nota = 'Escribe un concepto.';
+    if (!concepto.trim()) nuevosErrores.concepto = 'Escribe un concepto.';
 
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
@@ -46,26 +48,27 @@ export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }:
 
     setErrores({});
 
-    alGuardar({
+    await alGuardar({
       tipo,
       monto: Number(monto),
       fecha,
       categoria,
-      cuenta,
-      nota: nota.trim(),
+      cuenta_id: cuenta,
+      concepto: concepto.trim(),
+      persona: persona.trim(),
       ...(tipo === 'prestamo' ? { direccionPrestamo } : {}),
     });
   }
 
   return (
     <div
-      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d26]/45 p-3 backdrop-blur-sm sm:p-4"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-end justify-center bg-[#1d1d26]/45 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={alCerrar}
     >
       <div
-        className="animate-modal-in w-full max-w-[680px] overflow-hidden rounded-[22px] bg-white shadow-[0_30px_80px_rgba(29,29,38,0.25)] ring-1 ring-[#e6e5ee]"
+        className="animate-modal-in max-h-[100dvh] w-full max-w-[680px] overflow-hidden rounded-t-[22px] bg-white shadow-[0_30px_80px_rgba(29,29,38,0.25)] ring-1 ring-[#e6e5ee] sm:max-h-[92vh] sm:rounded-[22px]"
         onClick={(evento) => evento.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-[#e9e8f0] px-4 py-4 sm:px-6 sm:py-5">
@@ -148,8 +151,8 @@ export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }:
                 >
                   <option value="">Selecciona cuenta</option>
                   {cuentas.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
+                    <option key={item.id} value={item.id}>
+                      {item.nombre}
                     </option>
                   ))}
                 </select>
@@ -157,16 +160,18 @@ export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }:
               </Campo>
             </div>
 
+            {tipo === 'prestamo' && <Campo etiqueta="Persona relacionada"><input required value={persona} onChange={(evento) => setPersona(evento.target.value)} placeholder="Ej. Carlos" className="campo" /></Campo>}
+
             <Campo etiqueta="Concepto">
               <textarea
                 required
                 rows={3}
-                value={nota}
-                onChange={(evento) => setNota(evento.target.value)}
+                value={concepto}
+                onChange={(evento) => setConcepto(evento.target.value)}
                 placeholder="Ej. Supermercado, nómina, préstamo a Carlos..."
                 className="campo min-h-[96px] resize-none py-3"
               />
-              {errores.nota && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.nota}</p>}
+              {errores.concepto && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.concepto}</p>}
             </Campo>
 
             <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">

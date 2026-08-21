@@ -1,0 +1,9 @@
+import { Banknote, CreditCard, Smartphone, Wallet } from 'lucide-react';
+import { Cuenta } from '@/tipos/movimientos';
+import { moneda } from '@/utilidades/formato';
+
+const iconos = { efectivo: Banknote, yape: Smartphone, plin: Smartphone, sip: Wallet, banco: CreditCard };
+
+export function TarjetasCuentas({ cuentas, onAgregar }: { cuentas: Cuenta[]; onAgregar: () => void }) {
+  return <section><div className="mb-3 flex items-center justify-between"><div><h2 className="text-lg font-bold">Mis cuentas</h2><p className="mt-1 text-xs text-[#878795]">Saldos disponibles por billetera</p></div><button onClick={onAgregar} className="rounded-lg bg-[#eef0ff] px-3 py-2 text-xs font-bold text-[#293ea9]">+ Agregar cuenta</button></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{cuentas.map((cuenta) => { const Icono = iconos[cuenta.tipo] ?? Wallet; const color = cuenta.color ?? '#293ea9'; return <article key={cuenta.id} className="rounded-2xl border border-[#dedde8] bg-white p-4 shadow-[0_2px_8px_rgba(29,29,38,.04)]" style={{ borderTopColor: color, borderTopWidth: 3 }}><div className="flex items-center justify-between"><div className="grid h-9 w-9 place-items-center rounded-xl" style={{ color, backgroundColor: `${color}18` }}><Icono size={18} /></div><span className="text-[10px] font-bold uppercase tracking-wider text-[#858592]">{cuenta.tipo}</span></div><p className="mt-4 text-sm font-semibold text-[#646574]">{cuenta.nombre}</p><p className="mt-1 text-2xl font-bold text-[#23232d]">{moneda(cuenta.saldo)}</p></article>; })}</div>{cuentas.length === 0 && <div className="rounded-2xl border border-dashed border-[#cfcddc] bg-white p-6 text-center text-sm text-[#777887]">Aún no tienes cuentas. Crea tu primera billetera para registrar movimientos.</div>}</section>;
+}

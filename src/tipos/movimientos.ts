@@ -1,5 +1,6 @@
 export type TipoMovimiento = 'gasto' | 'ingreso' | 'prestamo';
 export type DireccionPrestamo = 'prestado' | 'recibido';
+export type DireccionPrestamoSupabase = 'me_deben' | 'yo_debo';
 
 export type Movimiento = {
   id: string;
@@ -8,12 +9,16 @@ export type Movimiento = {
   fecha: string;
   categoria: string;
   cuenta: string;
-  nota: string;
+  cuenta_id?: string;
+  concepto: string;
   direccionPrestamo?: DireccionPrestamo;
+  persona?: string;
 };
 
-export type MetaAhorro = { id: string; nombre: string; actual: number; objetivo: number };
-export type Prestamo = { id: string; persona: string; monto: number; direccion: DireccionPrestamo; pagado: number };
+export type MetaAhorro = { id: string; user_id?: string; nombre: string; monto_objetivo: number; monto_actual: number };
+export type TipoCuenta = 'efectivo' | 'yape' | 'plin' | 'sip' | 'banco';
+export type Cuenta = { id: string; user_id?: string; nombre: string; tipo: TipoCuenta; saldo: number; color: string | null };
+export type Prestamo = { id: string; user_id?: string; persona: string; monto: number; direccion: DireccionPrestamoSupabase; pagado: boolean; movimiento_id?: string };
 
 export type ResumenFinanciero = {
   ingresos: number;
