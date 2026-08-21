@@ -7,7 +7,9 @@ import { FormularioMeta } from '@/componentes/FormularioMeta';
 import { FormularioRecurrente } from '@/componentes/FormularioRecurrente';
 import { FormularioCuenta } from '@/componentes/FormularioCuenta';
 import { FormularioAbono } from '@/componentes/FormularioAbono';
+import { FormularioTransferencia } from '@/componentes/FormularioTransferencia';
 import { GastosRecurrentes } from '@/componentes/GastosRecurrentes';
+import { HistorialTransferencias } from '@/componentes/HistorialTransferencias';
 import { PanelConsejos } from '@/componentes/PanelConsejos';
 import { PanelMetas } from '@/componentes/PanelMetas';
 import { PanelPrestamos } from '@/componentes/PanelPrestamos';
@@ -32,6 +34,8 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
   const [recurrenteEditando, setRecurrenteEditando] = useState<import('@/tipos/movimientos').GastoRecurrente | undefined>();
   const [cuentaFormAbierto, setCuentaFormAbierto] = useState(false);
   const [metaAbonando, setMetaAbonando] = useState<import('@/tipos/movimientos').MetaAhorro | undefined>();
+  const [transferenciaAbierta, setTransferenciaAbierta] = useState(false);
+  const [cuentaOrigenTransferencia, setCuentaOrigenTransferencia] = useState<string | undefined>();
 
   const resumen = useMemo(() => {
     const ingresos = storage.movimientos.filter((item) => item.tipo === 'ingreso').reduce((total, item) => total + item.monto, 0);
@@ -87,8 +91,9 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
     <main id="inicio" className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-5 lg:px-10 lg:py-9">
       <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="mb-1 text-xs font-semibold uppercase tracking-[.12em] text-[#777887]">Resumen actualizado</p><h1 className="text-[28px] font-bold tracking-[-.7px]">Resumen general</h1><p className="mt-1 text-sm text-[#6f7080]">Tu salud financiera en una sola vista.</p></div><div className="flex items-center gap-2"><button className="flex items-center gap-2 rounded-lg border border-[#d5d4df] bg-white px-3 py-2 text-xs font-semibold text-[#555766]"><CalendarDays size={15} /> Esta quincena <ChevronDown size={14} /></button><button className="hidden rounded-lg p-2 text-[#777887] hover:bg-white sm:block" aria-label="Más opciones"><MoreVertical size={19} /></button></div></div>
       <TarjetasResumen resumen={resumen} />
-      <TarjetasCuentas cuentas={storage.cuentas} onAgregar={agregarCuenta} />
+      <TarjetasCuentas cuentas={storage.cuentas} onAgregar={agregarCuenta} onTransferir={(cuentaId) => { setCuentaOrigenTransferencia(cuentaId); setTransferenciaAbierta(true); }} />
       <GastosRecurrentes recurrentes={storage.recurrentes} onAgregar={agregarRecurrente} onEditar={(item) => { setRecurrenteEditando(item); setRecurrenteFormAbierto(true); }} onPausar={(item) => void storage.actualizarRecurrente(item.id, { activo: !item.activo })} onEliminar={(id) => void storage.eliminarRecurrente(id)} />
+      <HistorialTransferencias transferencias={storage.transferencias} />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><SeccionFlujoCaja movimientos={storage.movimientos} cargando={storage.cargando} onNuevoMovimiento={abrirNuevoMovimiento} /><PanelConsejos movimientos={storage.movimientos} historial={[]} /></div>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><TablaMovimientos movimientos={movimientosFiltrados} busqueda={busqueda} filtroTipo={filtroTipo} fechaDesde={fechaDesde} fechaHasta={fechaHasta} onBusqueda={setBusqueda} onFiltro={setFiltroTipo} onFechaDesde={setFechaDesde} onFechaHasta={setFechaHasta} onExportar={exportarMovimientos} onEditar={(movimiento) => { setMovimientoEditando(movimiento); setModalAbierto(true); }} onEliminar={storage.eliminarMovimiento} /><div className="space-y-5"><PanelMetas metas={storage.metas} onAgregar={agregarMeta} onEditar={editarMeta} onAbonar={abonarMeta} onEliminar={(id) => void storage.eliminarMeta(id)} /><PanelPrestamos meDeben={resumen.meDeben} yoDebo={resumen.yoDebo} /></div></div>
     </main>
@@ -98,6 +103,7 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
     {recurrenteFormAbierto && <FormularioRecurrente recurrente={recurrenteEditando} cuentas={storage.cuentas} alCerrar={() => { setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} alGuardar={async (datos) => { if (recurrenteEditando) await storage.actualizarRecurrente(recurrenteEditando.id, datos); else await storage.agregarRecurrente(datos); setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} />}
     {cuentaFormAbierto && <FormularioCuenta alCerrar={() => setCuentaFormAbierto(false)} alGuardar={async (datos) => { await storage.agregarCuenta(datos); setCuentaFormAbierto(false); }} />}
     {metaAbonando && <FormularioAbono meta={metaAbonando} cuentas={storage.cuentas} alCerrar={() => setMetaAbonando(undefined)} alGuardar={async (cuentaId, monto) => { await storage.abonarMeta(metaAbonando, cuentaId, monto); setMetaAbonando(undefined); }} />}
+    {transferenciaAbierta && <FormularioTransferencia cuentas={storage.cuentas} cuentaOrigenInicial={cuentaOrigenTransferencia} alCerrar={() => { setTransferenciaAbierta(false); setCuentaOrigenTransferencia(undefined); }} alTransferir={async (origen, destino, monto, concepto, fecha) => { await storage.realizarTransferencia(origen, destino, monto, concepto, fecha); setTransferenciaAbierta(false); setCuentaOrigenTransferencia(undefined); }} />}
     {storage.toast && <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-[#1d1d26] px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{storage.toast.mensaje}</div>}
   </div>;
 }

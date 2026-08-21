@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { Cuenta, GastoRecurrente, MetaAhorro, Movimiento, Prestamo } from '@/tipos/movimientos';
+import { Cuenta, GastoRecurrente, MetaAhorro, Movimiento, Prestamo, Transferencia } from '@/tipos/movimientos';
 
 type Toast = { tipo: 'exito' | 'error'; mensaje: string } | null;
 type MovimientoEntrada = Omit<Movimiento, 'id' | 'cuenta'> & { cuenta_id: string; cuenta?: string; persona?: string };
@@ -26,6 +26,7 @@ export function useFinanceStorage(user: User | null) {
   const [metas, setMetas] = useState<MetaAhorro[]>([]);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [recurrentes, setRecurrentes] = useState<GastoRecurrente[]>([]);
+  const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState<Toast>(null);
 
@@ -41,24 +42,27 @@ export function useFinanceStorage(user: User | null) {
       setMetas([]);
       setPrestamos([]);
       setRecurrentes([]);
+      setTransferencias([]);
       setCargando(false);
       return;
     }
 
     setCargando(true);
     try {
-      const [movimientosResult, cuentasResult, metasResult, prestamosResult, recurrentesResult] = await Promise.all([
+      const [movimientosResult, cuentasResult, metasResult, prestamosResult, recurrentesResult, transferenciasResult] = await Promise.all([
         supabase.from('movimientos').select('*, cuentas(nombre)').eq('user_id', user.id).order('fecha', { ascending: false }),
         supabase.from('cuentas').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('metas').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('prestamos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('gastos_recurrentes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('transferencias').select('*, origen:cuentas!transferencias_cuenta_origen_id_fkey(nombre), destino:cuentas!transferencias_cuenta_destino_id_fkey(nombre)').eq('user_id', user.id).order('fecha', { ascending: false }).limit(10),
       ]);
       if (movimientosResult.error) throw movimientosResult.error;
       if (cuentasResult.error) throw cuentasResult.error;
       if (metasResult.error) throw metasResult.error;
       if (prestamosResult.error) throw prestamosResult.error;
       if (recurrentesResult.error) throw recurrentesResult.error;
+      if (transferenciasResult.error) throw transferenciasResult.error;
 
       const prestamosCargados = (prestamosResult.data ?? []) as Prestamo[];
       const porMovimiento = new Map(prestamosCargados.map((item) => [item.movimiento_id, item]));
@@ -70,6 +74,7 @@ export function useFinanceStorage(user: User | null) {
       setMetas((metasResult.data ?? []) as MetaAhorro[]);
       setPrestamos(prestamosCargados);
       setRecurrentes((recurrentesResult.data ?? []) as GastoRecurrente[]);
+      setTransferencias((transferenciasResult.data ?? []).map((item) => ({ ...item, cuenta_origen: (item.origen as { nombre?: string } | null)?.nombre, cuenta_destino: (item.destino as { nombre?: string } | null)?.nombre })) as Transferencia[]);
     } catch (error) {
       notificar('error', `No se pudieron cargar tus datos: ${mostrarError(error)}`);
     } finally {
@@ -81,7 +86,7 @@ export function useFinanceStorage(user: User | null) {
 
   useEffect(() => {
     if (!user) return;
-    const canal = supabase.channel(`finanzpro-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'prestamos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'gastos_recurrentes', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).subscribe();
+    const canal = supabase.channel(`finanzpro-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'prestamos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'gastos_recurrentes', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'transferencias', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).subscribe();
     return () => { void supabase.removeChannel(canal); };
   }, [cargarDatos, user]);
 
@@ -101,6 +106,26 @@ export function useFinanceStorage(user: User | null) {
     const { error } = await supabase.from('cuentas').update({ saldo: cuentaActual.saldo + variacion }).eq('id', cuentaId).eq('user_id', user?.id);
     if (error) throw error;
   }, [cuentas, user?.id]);
+
+  const realizarTransferencia = useCallback(async (cuentaOrigenId: string, cuentaDestinoId: string, monto: number, concepto: string, fecha: string) => {
+    if (!user) return;
+    const origen = cuentas.find((cuenta) => cuenta.id === cuentaOrigenId);
+    const destino = cuentas.find((cuenta) => cuenta.id === cuentaDestinoId);
+    if (!origen || !destino) { notificar('error', 'Selecciona cuentas válidas.'); return; }
+    if (origen.saldo < monto) { notificar('error', `Saldo insuficiente en ${origen.nombre}`); return; }
+    try {
+      const [origenResult, destinoResult, transferenciaResult] = await Promise.all([
+        supabase.from('cuentas').update({ saldo: origen.saldo - monto }).eq('id', origen.id).eq('user_id', user.id),
+        supabase.from('cuentas').update({ saldo: destino.saldo + monto }).eq('id', destino.id).eq('user_id', user.id),
+        supabase.from('transferencias').insert({ user_id: user.id, cuenta_origen_id: origen.id, cuenta_destino_id: destino.id, monto, concepto: concepto || null, fecha }),
+      ]);
+      if (origenResult.error) throw origenResult.error;
+      if (destinoResult.error) throw destinoResult.error;
+      if (transferenciaResult.error) throw transferenciaResult.error;
+      notificar('exito', `Transferencia realizada: ${monedaToast(monto)} de ${origen.nombre} a ${destino.nombre}`);
+      await cargarDatos();
+    } catch (error) { notificar('error', `No se pudo realizar la transferencia: ${mostrarError(error)}`); }
+  }, [cargarDatos, cuentas, notificar, user]);
 
   const agregarMovimiento = useCallback(async (datos: MovimientoEntrada) => {
     if (!user) return;
@@ -183,5 +208,7 @@ export function useFinanceStorage(user: User | null) {
     try { const { error } = await supabase.from('metas').update(datos).eq('id', id).eq('user_id', user.id); if (error) throw error; notificar('exito', 'Meta actualizada.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo actualizar la meta: ${mostrarError(error)}`); }
   }, [cargarDatos, notificar, user]);
 
-  return { movimientos, cuentas, metas, prestamos, recurrentes, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, agregarRecurrente, actualizarRecurrente, eliminarRecurrente, agregarMeta, actualizarMeta, abonarMeta, eliminarMeta, recargar: cargarDatos };
+  return { movimientos, cuentas, metas, prestamos, recurrentes, transferencias, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, realizarTransferencia, agregarRecurrente, actualizarRecurrente, eliminarRecurrente, agregarMeta, actualizarMeta, abonarMeta, eliminarMeta, recargar: cargarDatos };
 }
+
+function monedaToast(valor: number) { return `S/${valor.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
