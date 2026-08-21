@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, MoreVertical, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download, MoreVertical, Search } from 'lucide-react';
 import { Movimiento, TipoMovimiento } from '@/tipos/movimientos';
 import { fechaVisible, moneda } from '@/utilidades/formato';
 
@@ -19,10 +19,14 @@ type Props = {
 };
 
 export function TablaMovimientos({ movimientos, busqueda, filtroTipo, fechaDesde, fechaHasta, onBusqueda, onFiltro, onFechaDesde, onFechaHasta, onExportar, onEditar, onEliminar }: Props) {
+  const [orden, setOrden] = useState<{ campo: 'fecha' | 'concepto' | 'categoria' | 'monto'; asc: boolean }>({ campo: 'fecha', asc: false });
   const paginas = Math.max(1, Math.ceil(movimientos.length / 10));
   const [pagina, setPagina] = useState(1);
   const paginaActual = Math.min(pagina, paginas);
-  const visibles = movimientos.slice((paginaActual - 1) * 10, paginaActual * 10);
+  const ordenados = [...movimientos].sort((a, b) => { const valorA = orden.campo === 'monto' ? a.monto : a[orden.campo].toString().toLowerCase(); const valorB = orden.campo === 'monto' ? b.monto : b[orden.campo].toString().toLowerCase(); const comparacion = valorA < valorB ? -1 : valorA > valorB ? 1 : 0; return orden.asc ? comparacion : -comparacion; });
+  const visibles = ordenados.slice((paginaActual - 1) * 10, paginaActual * 10);
+
+  function cambiarOrden(campo: typeof orden.campo) { setOrden((actual) => actual.campo === campo ? { campo, asc: !actual.asc } : { campo, asc: campo === 'monto' ? false : true }); setPagina(1); }
 
   useEffect(() => setPagina(1), [busqueda, filtroTipo, fechaDesde, fechaHasta]);
 
@@ -30,11 +34,13 @@ export function TablaMovimientos({ movimientos, busqueda, filtroTipo, fechaDesde
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ecebf1] p-5"><div><h2 className="text-lg font-bold">Movimientos recientes</h2><p className="mt-1 text-xs text-[#878795]">Consulta y organiza tus operaciones</p></div><button onClick={onExportar} className="flex items-center gap-2 text-xs font-bold text-[#293ea9] hover:underline"><Download size={14} /> Exportar</button></div>
     <div className="grid gap-3 border-b border-[#ecebf1] bg-[#fcfcfe] p-4 sm:grid-cols-2 lg:grid-cols-4"><div className="relative sm:col-span-2"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8c8c99]" /><input value={busqueda} onChange={(event) => onBusqueda(event.target.value)} className="h-10 w-full rounded-lg border border-[#dddde7] bg-white pl-9 pr-3 text-xs outline-none focus:border-[#293ea9]" placeholder="Buscar movimiento..." /></div><select value={filtroTipo} onChange={(event) => onFiltro(event.target.value as 'todos' | TipoMovimiento)} className="h-10 rounded-lg border border-[#dddde7] bg-white px-3 text-xs text-[#555766] outline-none"><option value="todos">Todos los tipos</option><option value="ingreso">Ingresos</option><option value="gasto">Gastos</option><option value="prestamo">Préstamos</option></select><div className="flex gap-2"><input aria-label="Fecha desde" type="date" value={fechaDesde} onChange={(event) => onFechaDesde(event.target.value)} className="h-10 min-w-0 w-full rounded-lg border border-[#dddde7] px-2 text-xs" /><input aria-label="Fecha hasta" type="date" value={fechaHasta} onChange={(event) => onFechaHasta(event.target.value)} className="h-10 min-w-0 w-full rounded-lg border border-[#dddde7] px-2 text-xs" /></div></div>
     <div className="space-y-3 p-4 md:hidden">{visibles.map((movimiento) => <TarjetaMovimiento key={movimiento.id} movimiento={movimiento} onEditar={onEditar} onEliminar={onEliminar} />)}</div>
-    <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-[#f7f6fb] text-[10px] font-bold uppercase tracking-wider text-[#777887]"><tr><th className="px-5 py-3">Fecha</th><th className="px-5 py-3">Concepto</th><th className="px-5 py-3">Categoría</th><th className="px-5 py-3 text-right">Monto (S/)</th><th className="px-5 py-3" /></tr></thead><tbody>{visibles.map((movimiento, indice) => <FilaMovimiento key={movimiento.id} movimiento={movimiento} indice={indice} onEditar={onEditar} onEliminar={onEliminar} />)}</tbody></table></div>
+    <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-[#f7f6fb] text-[10px] font-bold uppercase tracking-wider text-[#777887]"><tr><Cabecera texto="Fecha" campo="fecha" orden={orden} onOrden={cambiarOrden} /><Cabecera texto="Concepto" campo="concepto" orden={orden} onOrden={cambiarOrden} /><Cabecera texto="Categoría" campo="categoria" orden={orden} onOrden={cambiarOrden} /><Cabecera texto="Monto (S/)" campo="monto" orden={orden} onOrden={cambiarOrden} derecha /><th className="px-5 py-3" /></tr></thead><tbody>{visibles.map((movimiento, indice) => <FilaMovimiento key={movimiento.id} movimiento={movimiento} indice={indice} onEditar={onEditar} onEliminar={onEliminar} />)}</tbody></table></div>
     {visibles.length === 0 && <p className="p-8 text-center text-sm text-[#81818e]">No hay movimientos con estos filtros.</p>}
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ecebf1] px-5 py-4 text-xs text-[#81818e]"><span>{movimientos.length} movimientos encontrados</span><div className="flex items-center gap-2"><button disabled={paginaActual === 1} onClick={() => setPagina((actual) => actual - 1)} className="rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button><span>Página {paginaActual} de {paginas}</span><button disabled={paginaActual === paginas} onClick={() => setPagina((actual) => actual + 1)} className="rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button></div></div>
   </section>;
 }
+
+function Cabecera({ texto, campo, orden, onOrden, derecha }: { texto: string; campo: 'fecha' | 'concepto' | 'categoria' | 'monto'; orden: { campo: string; asc: boolean }; onOrden: (campo: 'fecha' | 'concepto' | 'categoria' | 'monto') => void; derecha?: boolean }) { const activa = orden.campo === campo; return <th className={`px-5 py-3 ${derecha ? 'text-right' : ''}`}><button onClick={() => onOrden(campo)} className="inline-flex items-center gap-1 hover:text-[#293ea9]">{texto}{activa && (orden.asc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button></th>; }
 
 function TarjetaMovimiento({ movimiento, onEditar, onEliminar }: { movimiento: Movimiento; onEditar: (movimiento: Movimiento) => void; onEliminar: (movimiento: Movimiento) => void }) {
   const positivo = movimiento.tipo === 'ingreso';

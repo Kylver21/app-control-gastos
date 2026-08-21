@@ -20,6 +20,15 @@ function cambioSaldo(tipo: Movimiento['tipo'], monto: number, direccion?: Movimi
   return direccion === 'recibido' ? monto : -monto;
 }
 
+function siguienteFecha(fecha: string, frecuencia: GastoRecurrente['frecuencia']) {
+  const siguiente = new Date(`${fecha}T12:00:00`);
+  if (frecuencia === 'diario') siguiente.setDate(siguiente.getDate() + 1);
+  else if (frecuencia === 'semanal') siguiente.setDate(siguiente.getDate() + 7);
+  else if (frecuencia === 'quincenal') siguiente.setDate(siguiente.getDate() + 15);
+  else siguiente.setMonth(siguiente.getMonth() + 1);
+  return siguiente.toISOString().slice(0, 10);
+}
+
 export function useFinanceStorage(user: User | null) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
@@ -134,7 +143,7 @@ export function useFinanceStorage(user: User | null) {
       if (error) throw error;
       await actualizarSaldoCuenta(datos.cuenta_id, cambioSaldo(datos.tipo, datos.monto, datos.direccionPrestamo));
       if (datos.tipo === 'prestamo') {
-        const { error: prestamoError } = await supabase.from('prestamos').insert({ user_id: user.id, movimiento_id: movimiento.id, persona: datos.persona ?? datos.concepto, monto: datos.monto, direccion: direccionParaBase(datos), pagado: false });
+        const { error: prestamoError } = await supabase.from('prestamos').insert({ user_id: user.id, movimiento_id: movimiento.id, persona: datos.persona ?? datos.concepto, monto: datos.monto, fecha: datos.fecha, cuenta_id: datos.cuenta_id, direccion: direccionParaBase(datos), pagado: false });
         if (prestamoError) throw prestamoError;
       }
       notificar('exito', 'Movimiento guardado correctamente.');
@@ -150,7 +159,7 @@ export function useFinanceStorage(user: User | null) {
       const { error } = await supabase.from('movimientos').update({ tipo: datos.tipo, monto: datos.monto, fecha: datos.fecha, categoria: datos.categoria, cuenta_id: datos.cuenta_id, concepto: datos.concepto }).eq('id', id).eq('user_id', user.id);
       if (error) throw error;
       if (anterior.tipo === 'prestamo') await supabase.from('prestamos').delete().eq('movimiento_id', id).eq('user_id', user.id);
-      if (datos.tipo === 'prestamo') await supabase.from('prestamos').insert({ user_id: user.id, movimiento_id: id, persona: datos.persona ?? datos.concepto, monto: datos.monto, direccion: direccionParaBase(datos), pagado: false });
+      if (datos.tipo === 'prestamo') await supabase.from('prestamos').insert({ user_id: user.id, movimiento_id: id, persona: datos.persona ?? datos.concepto, monto: datos.monto, fecha: datos.fecha, cuenta_id: datos.cuenta_id, direccion: direccionParaBase(datos), pagado: false });
       notificar('exito', 'Movimiento actualizado correctamente.');
       await cargarDatos();
     } catch (error) { notificar('error', `No se pudo editar el movimiento: ${mostrarError(error)}`); }
@@ -171,6 +180,49 @@ export function useFinanceStorage(user: User | null) {
     if (!user) return;
     try { const { error } = await supabase.from('gastos_recurrentes').insert({ ...datos, user_id: user.id }); if (error) throw error; notificar('exito', 'Gasto recurrente agregado.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo agregar: ${mostrarError(error)}`); }
   }, [cargarDatos, notificar, user]);
+
+  const marcarPrestamoPagado = useCallback(async (prestamo: Prestamo, cuentaId: string) => {
+    if (!user) return;
+    try {
+      const cuenta = cuentas.find((item) => item.id === cuentaId);
+      if (!cuenta) throw new Error('Selecciona una cuenta válida.');
+      const tipo = prestamo.direccion === 'me_deben' ? 'ingreso' : 'gasto';
+      const concepto = `${prestamo.direccion === 'me_deben' ? 'Cobro' : 'Pago'} préstamo - ${prestamo.persona}`;
+      const { error: movimientoError } = await supabase.from('movimientos').insert({ user_id: user.id, tipo, monto: prestamo.monto, fecha: new Date().toISOString().slice(0, 10), categoria: 'Préstamo', cuenta_id: cuentaId, concepto });
+      if (movimientoError) throw movimientoError;
+      await actualizarSaldoCuenta(cuentaId, tipo === 'ingreso' ? prestamo.monto : -prestamo.monto);
+      const { error } = await supabase.from('prestamos').update({ pagado: true }).eq('id', prestamo.id).eq('user_id', user.id);
+      if (error) throw error;
+      notificar('exito', `${concepto} registrado.`);
+      await cargarDatos();
+    } catch (error) { notificar('error', `No se pudo marcar como pagado: ${mostrarError(error)}`); }
+  }, [actualizarSaldoCuenta, cargarDatos, cuentas, notificar, user]);
+
+  const actualizarPrestamo = useCallback(async (id: string, datos: Pick<Prestamo, 'persona' | 'monto'>) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('prestamos').update(datos).eq('id', id).eq('user_id', user.id); if (error) throw error; await cargarDatos(); notificar('exito', 'Préstamo actualizado.'); } catch (error) { notificar('error', `No se pudo actualizar el préstamo: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  const eliminarPrestamo = useCallback(async (id: string) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('prestamos').delete().eq('id', id).eq('user_id', user.id); if (error) throw error; await cargarDatos(); notificar('exito', 'Préstamo eliminado.'); } catch (error) { notificar('error', `No se pudo eliminar el préstamo: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  const registrarRecurrentes = useCallback(async (items: GastoRecurrente[]) => {
+    if (!user || !items.length) return;
+    try {
+      for (const item of items) {
+        if (!item.cuenta_id) throw new Error(`Selecciona una cuenta para ${item.nombre}.`);
+        const { error } = await supabase.from('movimientos').insert({ user_id: user.id, tipo: item.tipo ?? 'gasto', monto: item.monto, fecha: item.fecha_proximo_cobro, categoria: item.categoria ?? 'Otro', cuenta_id: item.cuenta_id, concepto: item.nombre });
+        if (error) throw error;
+        await actualizarSaldoCuenta(item.cuenta_id, (item.tipo ?? 'gasto') === 'ingreso' ? item.monto : -item.monto);
+        const { error: recurrenteError } = await supabase.from('gastos_recurrentes').update({ fecha_proximo_cobro: siguienteFecha(item.fecha_proximo_cobro ?? new Date().toISOString().slice(0, 10), item.frecuencia) }).eq('id', item.id).eq('user_id', user.id);
+        if (recurrenteError) throw recurrenteError;
+      }
+      notificar('exito', `${items.length} movimientos registrados automáticamente.`);
+      await cargarDatos();
+    } catch (error) { notificar('error', `No se pudieron registrar los recurrentes: ${mostrarError(error)}`); }
+  }, [actualizarSaldoCuenta, cargarDatos, notificar, user]);
 
   const actualizarRecurrente = useCallback(async (id: string, datos: Partial<GastoRecurrente>) => {
     try { const { error } = await supabase.from('gastos_recurrentes').update(datos).eq('id', id).eq('user_id', user?.id); if (error) throw error; await cargarDatos(); } catch (error) { notificar('error', `No se pudo actualizar: ${mostrarError(error)}`); }
@@ -208,7 +260,7 @@ export function useFinanceStorage(user: User | null) {
     try { const { error } = await supabase.from('metas').update(datos).eq('id', id).eq('user_id', user.id); if (error) throw error; notificar('exito', 'Meta actualizada.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo actualizar la meta: ${mostrarError(error)}`); }
   }, [cargarDatos, notificar, user]);
 
-  return { movimientos, cuentas, metas, prestamos, recurrentes, transferencias, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, realizarTransferencia, agregarRecurrente, actualizarRecurrente, eliminarRecurrente, agregarMeta, actualizarMeta, abonarMeta, eliminarMeta, recargar: cargarDatos };
+  return { movimientos, cuentas, metas, prestamos, recurrentes, transferencias, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, realizarTransferencia, agregarRecurrente, actualizarRecurrente, eliminarRecurrente, registrarRecurrentes, marcarPrestamoPagado, actualizarPrestamo, eliminarPrestamo, agregarMeta, actualizarMeta, abonarMeta, eliminarMeta, recargar: cargarDatos };
 }
 
 function monedaToast(valor: number) { return `S/${valor.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
