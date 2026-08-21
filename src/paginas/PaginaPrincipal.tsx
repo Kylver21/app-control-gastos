@@ -7,6 +7,7 @@ import { FormularioMeta } from '@/componentes/FormularioMeta';
 import { FormularioRecurrente } from '@/componentes/FormularioRecurrente';
 import { FormularioCuenta } from '@/componentes/FormularioCuenta';
 import { FormularioAbono } from '@/componentes/FormularioAbono';
+import { RegistroRapido } from '@/componentes/RegistroRapido';
 import { FormularioTransferencia } from '@/componentes/FormularioTransferencia';
 import { GastosRecurrentes } from '@/componentes/GastosRecurrentes';
 import { HistorialTransferencias } from '@/componentes/HistorialTransferencias';
@@ -34,6 +35,7 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
   const [recurrenteEditando, setRecurrenteEditando] = useState<import('@/tipos/movimientos').GastoRecurrente | undefined>();
   const [cuentaFormAbierto, setCuentaFormAbierto] = useState(false);
   const [metaAbonando, setMetaAbonando] = useState<import('@/tipos/movimientos').MetaAhorro | undefined>();
+  const [registroRapidoAbierto, setRegistroRapidoAbierto] = useState(false);
   const [transferenciaAbierta, setTransferenciaAbierta] = useState(false);
   const [cuentaOrigenTransferencia, setCuentaOrigenTransferencia] = useState<string | undefined>();
 
@@ -97,12 +99,13 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><SeccionFlujoCaja movimientos={storage.movimientos} cargando={storage.cargando} onNuevoMovimiento={abrirNuevoMovimiento} /><PanelConsejos movimientos={storage.movimientos} historial={[]} /></div>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><TablaMovimientos movimientos={movimientosFiltrados} busqueda={busqueda} filtroTipo={filtroTipo} fechaDesde={fechaDesde} fechaHasta={fechaHasta} onBusqueda={setBusqueda} onFiltro={setFiltroTipo} onFechaDesde={setFechaDesde} onFechaHasta={setFechaHasta} onExportar={exportarMovimientos} onEditar={(movimiento) => { setMovimientoEditando(movimiento); setModalAbierto(true); }} onEliminar={storage.eliminarMovimiento} /><div className="space-y-5"><PanelMetas metas={storage.metas} onAgregar={agregarMeta} onEditar={editarMeta} onAbonar={abonarMeta} onEliminar={(id) => void storage.eliminarMeta(id)} /><PanelPrestamos meDeben={resumen.meDeben} yoDebo={resumen.yoDebo} /></div></div>
     </main>
-    <button onClick={abrirNuevoMovimiento} className="fixed bottom-6 right-6 grid h-14 w-14 place-items-center rounded-full bg-[#293ea9] text-white shadow-xl shadow-[#293ea9]/30 transition hover:scale-105 sm:hidden" aria-label="Registrar movimiento"><Plus size={25} /></button>
+    <button onClick={() => setRegistroRapidoAbierto(true)} className="fixed bottom-6 right-6 grid h-14 w-14 place-items-center rounded-full bg-[#293ea9] text-white shadow-xl shadow-[#293ea9]/30 transition hover:scale-105 sm:hidden" aria-label="Registro rápido"><Plus size={25} /></button>
     {modalAbierto && <FormularioMovimiento movimientoInicial={movimientoEditando} alCerrar={() => { setModalAbierto(false); setMovimientoEditando(undefined); }} alGuardar={guardarMovimiento} cuentas={storage.cuentas} />}
     {metaFormAbierto && <FormularioMeta meta={metaEditando} cuentas={storage.cuentas} alCerrar={() => { setMetaFormAbierto(false); setMetaEditando(undefined); }} alGuardar={async (datos) => { if (metaEditando) await storage.actualizarMeta(metaEditando.id, datos); else await storage.agregarMeta(datos); setMetaFormAbierto(false); setMetaEditando(undefined); }} />}
     {recurrenteFormAbierto && <FormularioRecurrente recurrente={recurrenteEditando} cuentas={storage.cuentas} alCerrar={() => { setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} alGuardar={async (datos) => { if (recurrenteEditando) await storage.actualizarRecurrente(recurrenteEditando.id, datos); else await storage.agregarRecurrente(datos); setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} />}
     {cuentaFormAbierto && <FormularioCuenta alCerrar={() => setCuentaFormAbierto(false)} alGuardar={async (datos) => { await storage.agregarCuenta(datos); setCuentaFormAbierto(false); }} />}
     {metaAbonando && <FormularioAbono meta={metaAbonando} cuentas={storage.cuentas} alCerrar={() => setMetaAbonando(undefined)} alGuardar={async (cuentaId, monto) => { await storage.abonarMeta(metaAbonando, cuentaId, monto); setMetaAbonando(undefined); }} />}
+    {registroRapidoAbierto && <RegistroRapido cuentas={storage.cuentas} alCerrar={() => setRegistroRapidoAbierto(false)} alGuardar={async (datos) => { await storage.agregarMovimiento(datos); setRegistroRapidoAbierto(false); }} onRegistroCompleto={() => { setRegistroRapidoAbierto(false); abrirNuevoMovimiento(); }} />}
     {transferenciaAbierta && <FormularioTransferencia cuentas={storage.cuentas} cuentaOrigenInicial={cuentaOrigenTransferencia} alCerrar={() => { setTransferenciaAbierta(false); setCuentaOrigenTransferencia(undefined); }} alTransferir={async (origen, destino, monto, concepto, fecha) => { await storage.realizarTransferencia(origen, destino, monto, concepto, fecha); setTransferenciaAbierta(false); setCuentaOrigenTransferencia(undefined); }} />}
     {storage.toast && <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-[#1d1d26] px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{storage.toast.mensaje}</div>}
   </div>;

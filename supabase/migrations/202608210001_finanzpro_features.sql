@@ -21,6 +21,8 @@
     alter table gastos_recurrentes enable row level security;
     drop policy if exists users_own_recurrentes on gastos_recurrentes;
     create policy users_own_recurrentes on gastos_recurrentes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+    alter table gastos_recurrentes drop constraint if exists gastos_recurrentes_frecuencia_check;
+    alter table gastos_recurrentes add constraint gastos_recurrentes_frecuencia_check check (frecuencia in ('diario', 'semanal', 'quincenal', 'mensual'));
 
     create table if not exists transferencias (
     id uuid primary key default gen_random_uuid(),

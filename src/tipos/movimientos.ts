@@ -19,7 +19,7 @@ export type MetaAhorro = { id: string; user_id?: string; nombre: string; monto_o
 export type TipoCuenta = 'efectivo' | 'yape' | 'plin' | 'sip' | 'banco';
 export type Cuenta = { id: string; user_id?: string; nombre: string; tipo: TipoCuenta; saldo: number; saldo_ahorrado?: number; color: string | null };
 export type Prestamo = { id: string; user_id?: string; persona: string; monto: number; direccion: DireccionPrestamoSupabase; pagado: boolean; movimiento_id?: string };
-export type FrecuenciaRecurrente = 'mensual' | 'quincenal' | 'semanal';
+export type FrecuenciaRecurrente = 'diario' | 'mensual' | 'quincenal' | 'semanal';
 export type GastoRecurrente = { id: string; user_id?: string; nombre: string; monto: number; frecuencia: FrecuenciaRecurrente; dia_cobro?: number | null; fecha_proximo_cobro?: string | null; categoria?: string | null; cuenta_id?: string | null; activo: boolean };
 export type Transferencia = { id: string; user_id?: string; cuenta_origen_id: string; cuenta_destino_id: string; monto: number; concepto?: string | null; fecha: string; cuenta_origen?: string; cuenta_destino?: string };
 
