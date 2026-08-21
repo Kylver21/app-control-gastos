@@ -1,10 +1,12 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, HandCoins, Plus, X } from 'lucide-react';
-import { Movimiento, TipoMovimiento } from '@/tipos/movimientos';
+import { Plus, X } from 'lucide-react';
+import { SelectorTipoMovimiento } from '@/componentes/SelectorTipoMovimiento';
+import { DireccionPrestamo, Movimiento, TipoMovimiento } from '@/tipos/movimientos';
 
 type Props = {
   alCerrar: () => void;
   alGuardar: (datos: Omit<Movimiento, 'id'>) => void;
+  movimientoInicial?: Movimiento;
 };
 
 const categorias: Record<TipoMovimiento, string[]> = {
@@ -15,24 +17,34 @@ const categorias: Record<TipoMovimiento, string[]> = {
 
 const cuentas = ['Cuenta principal', 'Tarjeta terminada en 42', 'Billetera digital', 'Efectivo', 'Ahorro'];
 
-export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
-  const [tipo, setTipo] = useState<TipoMovimiento>('gasto');
-  const [monto, setMonto] = useState('');
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
-  const [categoria, setCategoria] = useState('');
-  const [cuenta, setCuenta] = useState('');
-  const [nota, setNota] = useState('');
-  const [error, setError] = useState('');
+export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial }: Props) {
+  const [tipo, setTipo] = useState<TipoMovimiento>(movimientoInicial?.tipo ?? 'gasto');
+  const [monto, setMonto] = useState(movimientoInicial?.monto.toString() ?? '');
+  const [fecha, setFecha] = useState(movimientoInicial?.fecha ?? new Date().toISOString().slice(0, 10));
+  const [categoria, setCategoria] = useState(movimientoInicial?.categoria ?? '');
+  const [cuenta, setCuenta] = useState(movimientoInicial?.cuenta ?? '');
+  const [nota, setNota] = useState(movimientoInicial?.nota ?? '');
+  const [direccionPrestamo, setDireccionPrestamo] = useState<DireccionPrestamo>(movimientoInicial?.direccionPrestamo ?? 'prestado');
+  const [errores, setErrores] = useState<Record<string, string>>({});
 
   const categoriasActivas = useMemo(() => categorias[tipo], [tipo]);
 
   function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
 
-    if (!monto || Number(monto) <= 0 || !categoria || !cuenta || !nota.trim()) {
-      setError('Completa el monto, categoría, cuenta y concepto para guardar.');
+    const nuevosErrores: Record<string, string> = {};
+    if (!monto || Number(monto) <= 0) nuevosErrores.monto = 'Ingresa un monto mayor que 0.';
+    if (!fecha) nuevosErrores.fecha = 'Selecciona una fecha.';
+    if (!categoria) nuevosErrores.categoria = 'Selecciona una categoría.';
+    if (!cuenta) nuevosErrores.cuenta = 'Selecciona una cuenta.';
+    if (!nota.trim()) nuevosErrores.nota = 'Escribe un concepto.';
+
+    if (Object.keys(nuevosErrores).length) {
+      setErrores(nuevosErrores);
       return;
     }
+
+    setErrores({});
 
     alGuardar({
       tipo,
@@ -41,18 +53,19 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
       categoria,
       cuenta,
       nota: nota.trim(),
+      ...(tipo === 'prestamo' ? { direccionPrestamo } : {}),
     });
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d26]/45 p-3 backdrop-blur-sm sm:p-4"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d26]/45 p-3 backdrop-blur-sm sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={alCerrar}
     >
       <div
-        className="w-full max-w-[680px] overflow-hidden rounded-[22px] bg-white shadow-[0_30px_80px_rgba(29,29,38,0.25)] ring-1 ring-[#e6e5ee]"
+        className="animate-modal-in w-full max-w-[680px] overflow-hidden rounded-[22px] bg-white shadow-[0_30px_80px_rgba(29,29,38,0.25)] ring-1 ring-[#e6e5ee]"
         onClick={(evento) => evento.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-[#e9e8f0] px-4 py-4 sm:px-6 sm:py-5">
@@ -75,50 +88,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
 
         <div className="max-h-[calc(92vh-88px)] overflow-y-auto p-4 sm:p-6">
           <form onSubmit={enviar} className="space-y-5">
-            <fieldset>
-              <legend className="mb-3 block text-[11px] font-bold uppercase tracking-[0.12em] text-[#5c5c6b]">
-                Tipo de movimiento
-              </legend>
-
-              <div className="grid grid-cols-3 gap-3">
-                {([
-                  ['gasto', 'Gasto', ArrowDown],
-                  ['ingreso', 'Ingreso', ArrowUp],
-                  ['prestamo', 'Préstamo', HandCoins],
-                ] as const).map(([valor, etiqueta, Icono]) => (
-                  <button
-                    type="button"
-                    key={valor}
-                    aria-pressed={tipo === valor}
-                    onClick={() => {
-                      setTipo(valor);
-                      setCategoria('');
-                    }}
-                    className={`min-h-[72px] rounded-2xl border-2 px-3 py-3 text-center transition-all duration-200 ${
-                      tipo === valor
-                        ? valor === 'gasto'
-                          ? 'border-[#c83235] bg-[#fff5f5] shadow-sm'
-                          : valor === 'ingreso'
-                            ? 'border-[#00805e] bg-[#f0fbf6] shadow-sm'
-                            : 'border-[#293ea9] bg-[#f3f4ff] shadow-sm'
-                        : 'border-[#e0dfe8] bg-white hover:border-[#b9b7c7]'
-                    }`}
-                  >
-                    <Icono
-                      size={21}
-                      className={`mx-auto mb-2 ${
-                        valor === 'gasto'
-                          ? 'text-[#c83235]'
-                          : valor === 'ingreso'
-                            ? 'text-[#00805e]'
-                            : 'text-[#293ea9]'
-                      }`}
-                    />
-                    <span className="text-xs font-semibold text-[#2b2c36]">{etiqueta}</span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+            <SelectorTipoMovimiento tipo={tipo} direccion={direccionPrestamo} onTipo={(valor) => { setTipo(valor); setCategoria(''); }} onDireccion={setDireccionPrestamo} />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Campo etiqueta="Monto">
@@ -136,7 +106,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
                     className="campo pl-10 pr-3"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-[#8a8b97]">Ingresa el valor numérico exacto.</p>
+                {errores.monto ? <p className="mt-1 text-[11px] text-[#b3262d]">{errores.monto}</p> : <p className="mt-1 text-[11px] text-[#8a8b97]">Ingresa el valor numérico exacto.</p>}
               </Campo>
 
               <Campo etiqueta="Fecha">
@@ -147,6 +117,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
                   type="date"
                   className="campo"
                 />
+                {errores.fecha && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.fecha}</p>}
               </Campo>
             </div>
 
@@ -165,6 +136,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
                     </option>
                   ))}
                 </select>
+                {errores.categoria && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.categoria}</p>}
               </Campo>
 
               <Campo etiqueta="Cuenta de origen">
@@ -181,6 +153,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
                     </option>
                   ))}
                 </select>
+                {errores.cuenta && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.cuenta}</p>}
               </Campo>
             </div>
 
@@ -193,13 +166,8 @@ export function FormularioMovimiento({ alCerrar, alGuardar }: Props) {
                 placeholder="Ej. Supermercado, nómina, préstamo a Carlos..."
                 className="campo min-h-[96px] resize-none py-3"
               />
+              {errores.nota && <p className="mt-1 text-[11px] text-[#b3262d]">{errores.nota}</p>}
             </Campo>
-
-            {error && (
-              <p className="rounded-xl border border-[#f7c2c8] bg-[#fff1f2] px-3 py-2 text-sm text-[#b3262d]">
-                {error}
-              </p>
-            )}
 
             <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
               <button

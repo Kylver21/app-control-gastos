@@ -5,9 +5,9 @@ const movimientosIniciales: Movimiento[] = [];
 const claveAlmacenamiento = 'finanzas-pro-movimientos';
 
 export function cargarMovimientos(): Movimiento[] {
-  const guardados = localStorage.getItem(claveAlmacenamiento);
-  if (!guardados) return movimientosIniciales;
   try {
+    const guardados = localStorage.getItem(claveAlmacenamiento);
+    if (!guardados) return movimientosIniciales;
     const datos: unknown = JSON.parse(guardados);
     return Array.isArray(datos) ? (datos as Movimiento[]) : movimientosIniciales;
   } catch {
@@ -16,7 +16,11 @@ export function cargarMovimientos(): Movimiento[] {
 }
 
 export function guardarMovimientos(movimientos: Movimiento[]): void {
-  localStorage.setItem(claveAlmacenamiento, JSON.stringify(movimientos));
+  try {
+    localStorage.setItem(claveAlmacenamiento, JSON.stringify(movimientos));
+  } catch {
+    // El hook principal comunica el error a la interfaz; esta función conserva compatibilidad.
+  }
 }
 
 export function crearMovimiento(datos: Omit<Movimiento, 'id'>): Movimiento {

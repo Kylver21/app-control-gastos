@@ -72,6 +72,23 @@ textarea.campo {
   padding-bottom: 10px;
 }
 
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-overlay-in { animation: overlay-in 180ms ease-out both; }
+.animate-modal-in { animation: modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-overlay-in, .animate-modal-in { animation: none; }
+}
+
 @media (max-width: 640px) {
   .campo {
     min-height: 48px;
