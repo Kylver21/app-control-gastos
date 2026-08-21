@@ -13,9 +13,9 @@ type Props = {
 export type DatosFormulario = Omit<Movimiento, 'id' | 'cuenta'> & { cuenta_id: string; persona?: string };
 
 const categorias: Record<TipoMovimiento, string[]> = {
-  gasto: ['Alimentación', 'Transporte', 'Vivienda', 'Entretenimiento', 'Cuidado personal', 'Gastos hormiga'],
-  ingreso: ['Ingreso fijo', 'Ingreso extra', 'Reembolso'],
-  prestamo: ['Préstamo familiar', 'Préstamo personal'],
+  ingreso: ['Sueldo', 'Quincena', 'Pago freelance', 'Ingreso extra', 'Reembolso', 'Bono', 'Comisión', 'Transferencia recibida'],
+  gasto: ['Alimentación', 'Transporte', 'Vivienda', 'Entretenimiento', 'Cuidado personal', 'Gastos hormiga', 'Salud', 'Educación', 'Ropa', 'Servicios (luz/agua/internet)', 'Deuda/cuota', 'Otro'],
+  prestamo: ['Préstamo familiar', 'Préstamo a amigo', 'Préstamo recibido'],
 };
 
 export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial, cuentas }: Props) {
@@ -106,7 +106,7 @@ export function FormularioMovimiento({ alCerrar, alGuardar, movimientoInicial, c
                     step="0.01"
                     inputMode="decimal"
                     placeholder="0.00"
-                    className="campo pl-10 pr-3"
+                    className="campo w-full pl-10 pr-3 text-base font-semibold"
                   />
                 </div>
                 {errores.monto ? <p className="mt-1 text-[11px] text-[#b3262d]">{errores.monto}</p> : <p className="mt-1 text-[11px] text-[#8a8b97]">Ingresa el valor numérico exacto.</p>}

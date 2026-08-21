@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { Cuenta, MetaAhorro, Movimiento, Prestamo } from '@/tipos/movimientos';
+import { Cuenta, GastoRecurrente, MetaAhorro, Movimiento, Prestamo } from '@/tipos/movimientos';
 
 type Toast = { tipo: 'exito' | 'error'; mensaje: string } | null;
 type MovimientoEntrada = Omit<Movimiento, 'id' | 'cuenta'> & { cuenta_id: string; cuenta?: string; persona?: string };
@@ -25,6 +25,7 @@ export function useFinanceStorage(user: User | null) {
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [metas, setMetas] = useState<MetaAhorro[]>([]);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
+  const [recurrentes, setRecurrentes] = useState<GastoRecurrente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [toast, setToast] = useState<Toast>(null);
 
@@ -39,22 +40,25 @@ export function useFinanceStorage(user: User | null) {
       setCuentas([]);
       setMetas([]);
       setPrestamos([]);
+      setRecurrentes([]);
       setCargando(false);
       return;
     }
 
     setCargando(true);
     try {
-      const [movimientosResult, cuentasResult, metasResult, prestamosResult] = await Promise.all([
+      const [movimientosResult, cuentasResult, metasResult, prestamosResult, recurrentesResult] = await Promise.all([
         supabase.from('movimientos').select('*, cuentas(nombre)').eq('user_id', user.id).order('fecha', { ascending: false }),
         supabase.from('cuentas').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('metas').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('prestamos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('gastos_recurrentes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       ]);
       if (movimientosResult.error) throw movimientosResult.error;
       if (cuentasResult.error) throw cuentasResult.error;
       if (metasResult.error) throw metasResult.error;
       if (prestamosResult.error) throw prestamosResult.error;
+      if (recurrentesResult.error) throw recurrentesResult.error;
 
       const prestamosCargados = (prestamosResult.data ?? []) as Prestamo[];
       const porMovimiento = new Map(prestamosCargados.map((item) => [item.movimiento_id, item]));
@@ -65,6 +69,7 @@ export function useFinanceStorage(user: User | null) {
       setCuentas((cuentasResult.data ?? []) as Cuenta[]);
       setMetas((metasResult.data ?? []) as MetaAhorro[]);
       setPrestamos(prestamosCargados);
+      setRecurrentes((recurrentesResult.data ?? []) as GastoRecurrente[]);
     } catch (error) {
       notificar('error', `No se pudieron cargar tus datos: ${mostrarError(error)}`);
     } finally {
@@ -76,7 +81,7 @@ export function useFinanceStorage(user: User | null) {
 
   useEffect(() => {
     if (!user) return;
-    const canal = supabase.channel(`finanzpro-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'prestamos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).subscribe();
+    const canal = supabase.channel(`finanzpro-${user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'prestamos', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).on('postgres_changes', { event: '*', schema: 'public', table: 'gastos_recurrentes', filter: `user_id=eq.${user.id}` }, () => void cargarDatos()).subscribe();
     return () => { void supabase.removeChannel(canal); };
   }, [cargarDatos, user]);
 
@@ -137,5 +142,46 @@ export function useFinanceStorage(user: User | null) {
     } catch (error) { notificar('error', `No se pudo eliminar el movimiento: ${mostrarError(error)}`); }
   }, [actualizarSaldoCuenta, cargarDatos, notificar, user]);
 
-  return { movimientos, cuentas, metas, prestamos, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, recargar: cargarDatos };
+  const agregarRecurrente = useCallback(async (datos: Omit<GastoRecurrente, 'id' | 'user_id'>) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('gastos_recurrentes').insert({ ...datos, user_id: user.id }); if (error) throw error; notificar('exito', 'Gasto recurrente agregado.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo agregar: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  const actualizarRecurrente = useCallback(async (id: string, datos: Partial<GastoRecurrente>) => {
+    try { const { error } = await supabase.from('gastos_recurrentes').update(datos).eq('id', id).eq('user_id', user?.id); if (error) throw error; await cargarDatos(); } catch (error) { notificar('error', `No se pudo actualizar: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user?.id]);
+
+  const eliminarRecurrente = useCallback(async (id: string) => {
+    try { const { error } = await supabase.from('gastos_recurrentes').delete().eq('id', id).eq('user_id', user?.id); if (error) throw error; notificar('exito', 'Gasto recurrente eliminado.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo eliminar: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user?.id]);
+
+  const agregarMeta = useCallback(async (datos: Omit<MetaAhorro, 'id' | 'user_id'>) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('metas').insert({ ...datos, user_id: user.id }); if (error) throw error; notificar('exito', 'Meta creada correctamente.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo crear la meta: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  const abonarMeta = useCallback(async (meta: MetaAhorro, cuentaId: string, monto: number) => {
+    if (!user || monto <= 0) return;
+    try {
+      const cuentaActual = cuentas.find((item) => item.id === cuentaId);
+      if (!cuentaActual || cuentaActual.saldo < monto) throw new Error('La cuenta no tiene saldo suficiente.');
+      const { error: metaError } = await supabase.from('metas').update({ monto_actual: Math.min(meta.monto_objetivo, meta.monto_actual + monto) }).eq('id', meta.id).eq('user_id', user.id);
+      if (metaError) throw metaError;
+      await actualizarSaldoCuenta(cuentaId, -monto);
+      notificar('exito', 'Abono realizado correctamente.');
+      await cargarDatos();
+    } catch (error) { notificar('error', `No se pudo abonar: ${mostrarError(error)}`); }
+  }, [actualizarSaldoCuenta, cargarDatos, cuentas, notificar, user]);
+
+  const eliminarMeta = useCallback(async (id: string) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('metas').delete().eq('id', id).eq('user_id', user.id); if (error) throw error; notificar('exito', 'Meta eliminada.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo eliminar la meta: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  const actualizarMeta = useCallback(async (id: string, datos: Partial<MetaAhorro>) => {
+    if (!user) return;
+    try { const { error } = await supabase.from('metas').update(datos).eq('id', id).eq('user_id', user.id); if (error) throw error; notificar('exito', 'Meta actualizada.'); await cargarDatos(); } catch (error) { notificar('error', `No se pudo actualizar la meta: ${mostrarError(error)}`); }
+  }, [cargarDatos, notificar, user]);
+
+  return { movimientos, cuentas, metas, prestamos, recurrentes, cargando, toast, agregarMovimiento, editarMovimiento, eliminarMovimiento, agregarCuenta, actualizarSaldoCuenta, agregarRecurrente, actualizarRecurrente, eliminarRecurrente, agregarMeta, actualizarMeta, abonarMeta, eliminarMeta, recargar: cargarDatos };
 }

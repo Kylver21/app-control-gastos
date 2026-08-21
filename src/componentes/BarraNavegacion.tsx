@@ -28,6 +28,8 @@ export function BarraNavegacion({ onExportar, onNuevoMovimiento, onLogout }: Pro
           <a className="border-b-2 border-[#293ea9] py-6 text-[#293ea9]" href="#inicio">Dashboard</a>
           <a href="#movimientos" className="hover:text-[#293ea9]">Movimientos</a>
           <a href="#metas" className="hover:text-[#293ea9]">Metas</a>
+          <a href="#recurrentes" className="hover:text-[#293ea9]">Recurrentes</a>
+          <a href="#cuentas" className="hover:text-[#293ea9]">Cuentas</a>
         </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -53,6 +55,8 @@ export function BarraNavegacion({ onExportar, onNuevoMovimiento, onLogout }: Pro
             <a onClick={cerrarMenu} href="#inicio">Dashboard</a>
             <a onClick={cerrarMenu} href="#movimientos">Movimientos</a>
             <a onClick={cerrarMenu} href="#metas">Metas</a>
+            <a onClick={cerrarMenu} href="#recurrentes">Recurrentes</a>
+            <a onClick={cerrarMenu} href="#cuentas">Cuentas</a>
             <button onClick={onNuevoMovimiento} className="flex items-center gap-2 rounded-lg bg-[#293ea9] px-3 py-3 text-left text-white">
               <Plus size={16} /> Registrar movimiento
             </button>

@@ -3,6 +3,11 @@ import { CalendarDays, ChevronDown, MoreVertical, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { BarraNavegacion } from '@/componentes/BarraNavegacion';
 import { FormularioMovimiento, DatosFormulario } from '@/componentes/FormularioMovimiento';
+import { FormularioMeta } from '@/componentes/FormularioMeta';
+import { FormularioRecurrente } from '@/componentes/FormularioRecurrente';
+import { FormularioCuenta } from '@/componentes/FormularioCuenta';
+import { FormularioAbono } from '@/componentes/FormularioAbono';
+import { GastosRecurrentes } from '@/componentes/GastosRecurrentes';
 import { PanelConsejos } from '@/componentes/PanelConsejos';
 import { PanelMetas } from '@/componentes/PanelMetas';
 import { PanelPrestamos } from '@/componentes/PanelPrestamos';
@@ -21,6 +26,12 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
   const [filtroTipo, setFiltroTipo] = useState<'todos' | TipoMovimiento>('todos');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [metaFormAbierto, setMetaFormAbierto] = useState(false);
+  const [metaEditando, setMetaEditando] = useState<import('@/tipos/movimientos').MetaAhorro | undefined>();
+  const [recurrenteFormAbierto, setRecurrenteFormAbierto] = useState(false);
+  const [recurrenteEditando, setRecurrenteEditando] = useState<import('@/tipos/movimientos').GastoRecurrente | undefined>();
+  const [cuentaFormAbierto, setCuentaFormAbierto] = useState(false);
+  const [metaAbonando, setMetaAbonando] = useState<import('@/tipos/movimientos').MetaAhorro | undefined>();
 
   const resumen = useMemo(() => {
     const ingresos = storage.movimientos.filter((item) => item.tipo === 'ingreso').reduce((total, item) => total + item.monto, 0);
@@ -43,10 +54,18 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
   }
 
   async function agregarCuenta() {
-    const nombre = window.prompt('Nombre de la cuenta, por ejemplo Banco BCP');
-    if (!nombre?.trim()) return;
-    await storage.agregarCuenta({ nombre: nombre.trim(), tipo: 'banco', saldo: 0, color: '#293ea9' });
+    setCuentaFormAbierto(true);
   }
+
+  function agregarMeta() { setMetaEditando(undefined); setMetaFormAbierto(true); }
+
+  function abonarMeta(meta: import('@/tipos/movimientos').MetaAhorro) {
+    setMetaAbonando(meta);
+  }
+
+  function editarMeta(meta: import('@/tipos/movimientos').MetaAhorro) { setMetaEditando(meta); setMetaFormAbierto(true); }
+
+  function agregarRecurrente() { setRecurrenteEditando(undefined); setRecurrenteFormAbierto(true); }
 
   function exportarMovimientos() {
     const filas = [['Fecha', 'Tipo', 'Concepto', 'Categoría', 'Cuenta', 'Monto'], ...movimientosFiltrados.map((item) => [item.fecha, item.tipo, item.concepto, item.categoria, item.cuenta, item.monto.toFixed(2)])];
@@ -69,11 +88,16 @@ export function PaginaPrincipal({ session, onLogout }: { session: Session; onLog
       <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="mb-1 text-xs font-semibold uppercase tracking-[.12em] text-[#777887]">Resumen actualizado</p><h1 className="text-[28px] font-bold tracking-[-.7px]">Resumen general</h1><p className="mt-1 text-sm text-[#6f7080]">Tu salud financiera en una sola vista.</p></div><div className="flex items-center gap-2"><button className="flex items-center gap-2 rounded-lg border border-[#d5d4df] bg-white px-3 py-2 text-xs font-semibold text-[#555766]"><CalendarDays size={15} /> Esta quincena <ChevronDown size={14} /></button><button className="hidden rounded-lg p-2 text-[#777887] hover:bg-white sm:block" aria-label="Más opciones"><MoreVertical size={19} /></button></div></div>
       <TarjetasResumen resumen={resumen} />
       <TarjetasCuentas cuentas={storage.cuentas} onAgregar={agregarCuenta} />
+      <GastosRecurrentes recurrentes={storage.recurrentes} onAgregar={agregarRecurrente} onEditar={(item) => { setRecurrenteEditando(item); setRecurrenteFormAbierto(true); }} onPausar={(item) => void storage.actualizarRecurrente(item.id, { activo: !item.activo })} onEliminar={(id) => void storage.eliminarRecurrente(id)} />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><SeccionFlujoCaja movimientos={storage.movimientos} cargando={storage.cargando} onNuevoMovimiento={abrirNuevoMovimiento} /><PanelConsejos movimientos={storage.movimientos} historial={[]} /></div>
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><TablaMovimientos movimientos={movimientosFiltrados} busqueda={busqueda} filtroTipo={filtroTipo} fechaDesde={fechaDesde} fechaHasta={fechaHasta} onBusqueda={setBusqueda} onFiltro={setFiltroTipo} onFechaDesde={setFechaDesde} onFechaHasta={setFechaHasta} onExportar={exportarMovimientos} onEditar={(movimiento) => { setMovimientoEditando(movimiento); setModalAbierto(true); }} onEliminar={storage.eliminarMovimiento} /><div className="space-y-5"><PanelMetas /><PanelPrestamos meDeben={resumen.meDeben} yoDebo={resumen.yoDebo} /></div></div>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"><TablaMovimientos movimientos={movimientosFiltrados} busqueda={busqueda} filtroTipo={filtroTipo} fechaDesde={fechaDesde} fechaHasta={fechaHasta} onBusqueda={setBusqueda} onFiltro={setFiltroTipo} onFechaDesde={setFechaDesde} onFechaHasta={setFechaHasta} onExportar={exportarMovimientos} onEditar={(movimiento) => { setMovimientoEditando(movimiento); setModalAbierto(true); }} onEliminar={storage.eliminarMovimiento} /><div className="space-y-5"><PanelMetas metas={storage.metas} onAgregar={agregarMeta} onEditar={editarMeta} onAbonar={abonarMeta} onEliminar={(id) => void storage.eliminarMeta(id)} /><PanelPrestamos meDeben={resumen.meDeben} yoDebo={resumen.yoDebo} /></div></div>
     </main>
     <button onClick={abrirNuevoMovimiento} className="fixed bottom-6 right-6 grid h-14 w-14 place-items-center rounded-full bg-[#293ea9] text-white shadow-xl shadow-[#293ea9]/30 transition hover:scale-105 sm:hidden" aria-label="Registrar movimiento"><Plus size={25} /></button>
     {modalAbierto && <FormularioMovimiento movimientoInicial={movimientoEditando} alCerrar={() => { setModalAbierto(false); setMovimientoEditando(undefined); }} alGuardar={guardarMovimiento} cuentas={storage.cuentas} />}
+    {metaFormAbierto && <FormularioMeta meta={metaEditando} cuentas={storage.cuentas} alCerrar={() => { setMetaFormAbierto(false); setMetaEditando(undefined); }} alGuardar={async (datos) => { if (metaEditando) await storage.actualizarMeta(metaEditando.id, datos); else await storage.agregarMeta(datos); setMetaFormAbierto(false); setMetaEditando(undefined); }} />}
+    {recurrenteFormAbierto && <FormularioRecurrente recurrente={recurrenteEditando} cuentas={storage.cuentas} alCerrar={() => { setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} alGuardar={async (datos) => { if (recurrenteEditando) await storage.actualizarRecurrente(recurrenteEditando.id, datos); else await storage.agregarRecurrente(datos); setRecurrenteFormAbierto(false); setRecurrenteEditando(undefined); }} />}
+    {cuentaFormAbierto && <FormularioCuenta alCerrar={() => setCuentaFormAbierto(false)} alGuardar={async (datos) => { await storage.agregarCuenta(datos); setCuentaFormAbierto(false); }} />}
+    {metaAbonando && <FormularioAbono meta={metaAbonando} cuentas={storage.cuentas} alCerrar={() => setMetaAbonando(undefined)} alGuardar={async (cuentaId, monto) => { await storage.abonarMeta(metaAbonando, cuentaId, monto); setMetaAbonando(undefined); }} />}
     {storage.toast && <div className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-[#1d1d26] px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{storage.toast.mensaje}</div>}
   </div>;
 }
